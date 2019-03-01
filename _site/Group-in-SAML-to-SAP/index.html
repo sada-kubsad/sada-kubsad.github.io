@@ -1,0 +1,315 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>Azure AD: Groups memberships in SAML 2.0 assertions to SAP Analytics Cloud – Sada Kubsad – Bits and Bytes on Technology</title>
+
+        <meta charset="utf-8" />
+    <meta content='text/html; charset=utf-8' http-equiv='Content-Type'>
+    <meta http-equiv='X-UA-Compatible' content='IE=edge'>
+    <meta name='viewport' content='width=device-width, initial-scale=1.0, maximum-scale=1.0'>
+
+    
+    <meta name="description" content="Someoe asked how to add group membership to the SAML 2.0 assertion from Azure AD to an application such as SAP Analytics Cloud. This would allow seemless single sign-on to SAP Analytics Cloud (SAC). This post documents the steps to sending group membership in the SAML 2.0 tokens from Azure AD to SAP Analytics Cloud (SAC).
+
+" />
+    <meta property="og:description" content="Someoe asked how to add group membership to the SAML 2.0 assertion from Azure AD to an application such as SAP Analytics Cloud. This would allow seemless single sign-on to SAP Analytics Cloud (SAC). This post documents the steps to sending group membership in the SAML 2.0 tokens from Azure AD to SAP Analytics Cloud (SAC).
+
+" />
+    
+    <meta name="author" content="Sada Kubsad" />
+
+    
+    <meta property="og:title" content="Azure AD: Groups memberships in SAML 2.0 assertions to SAP Analytics Cloud" />
+    <meta property="twitter:title" content="Azure AD: Groups memberships in SAML 2.0 assertions to SAP Analytics Cloud" />
+    
+
+    <!--[if lt IE 9]>
+      <script src="http://html5shiv.googlecode.com/svn/trunk/html5.js"></script>
+    <![endif]-->
+
+    <link rel="stylesheet" type="text/css" href="/style.css" />
+    <link rel="alternate" type="application/rss+xml" title="Sada Kubsad - Bits and Bytes on Technology" href="/feed.xml" />
+
+    <!-- Created with Jekyll Now -->
+  </head>
+
+  <body>
+    <div class="wrapper-masthead">
+      <div class="container">
+        <header class="masthead clearfix">
+          <a href="/" class="site-avatar"><img src="https://raw.githubusercontent.com/sadamahan/jekyll-now/master/images/Seattle-Reduced.png" /></a>
+
+          <div class="site-info">
+            <h1 class="site-name"><a href="/">Sada Kubsad</a></h1>
+            <p class="site-description">Bits and Bytes on Technology</p>
+          </div>
+
+          <nav>
+            <a href="/">Blog</a>
+            <a href="/about">About</a>
+          </nav>
+        </header>
+      </div>
+    </div>
+
+    <div id="main" role="main" class="container">
+      <article class="post">
+  <h1>Azure AD: Groups memberships in SAML 2.0 assertions to SAP Analytics Cloud</h1>
+
+  <div class="entry">
+    <p>Someoe asked how to add group membership to the SAML 2.0 assertion from Azure AD to an application such as SAP Analytics Cloud. This would allow seemless single sign-on to SAP Analytics Cloud (SAC). This post documents the steps to sending group membership in the SAML 2.0 tokens from Azure AD to SAP Analytics Cloud (SAC).</p>
+
+<h2 id="background">Background:</h2>
+<p><img src="/assets/images/2019-02-25-Group-in-SAML-to-SAP/diagram1.png" alt="Alt Text" /></p>
+
+<p>You can pass group membership either as Application Roles or  Security Group from Azure AD. Either gets translated into permissions during SAC’s authorization. See <a href="https://docs.microsoft.com/en-us/azure/architecture/multitenant-identity/app-roles">here</a> to learn the Pros and Cons of Application Roles and Security Groups.</p>
+
+<p>I chose to send group membership as Application Roles because I need to filter groups. In this case, Groups were sourced from an on-prem AD. Security Groups cannot yet be filtered. Security Groups <a href="https://docs.microsoft.com/en-us/azure/active-directory/develop/active-directory-claims-mapping#table-2-saml-restricted-claim-set">are restricted</a>. Instead it is much simpler and cleaner to use App Roles. Each user is already assigned to one or more Security Groups (sourced from on-prem). Each Security Group gets assigned to an App Role (in setp 4 below). When a user logs in to SAC, Azure AD will emit all the App Roles that the user is indirectly assigned to via Security Groups. Neat! This  capability requires Azure AD Premium. You can learn about this capability <a href="https://techcommunity.microsoft.com/t5/Azure-Active-Directory-Identity/Azure-Active-Directory-now-with-Group-Claims-and-Application/ba-p/243862">here</a></p>
+
+<p>Note: If groups are to be synched from an on-prem AD, AD Connect should be version 1.1.649.0 &amp; above.</p>
+
+<p>I do not have access to SAC. I’m going to use a <a href="https://github.com/Azure-Samples/active-directory-dotnet-webapp-wsfederation">WS-Federation client application</a> to mimick the SAC client interaction with Azure AD. See optional step 6 for how to setup and configure SAC client application.</p>
+
+<h2 id="here-are-the-steps">Here are the steps:</h2>
+<ol>
+  <li>Create the application in Azure AD</li>
+  <li>Configure the SAP Analytics Cloud Application in Azure AD</li>
+  <li>Create Roles for the Application in Azure AD</li>
+  <li>Assign Security Groups &amp; App Roles to the Application</li>
+  <li>Customize the claims issued in the SAML tokens</li>
+  <li>Optional: Configure a sample client for testing</li>
+  <li>Test and verify</li>
+</ol>
+
+<h2 id="1-create-the-application-in-azure-ad">1. Create the application in Azure AD</h2>
+<p>The application object in Azure AD is a representation of SAP Analytics Cloud. This object is going to control authentication and issue SAML tokens. Azure AD provides a few options to register the application:</p>
+<ul>
+  <li>Register via Portal &gt; Enterprise Apps &gt; Non-Gallery Application</li>
+  <li>Register via Portal &gt; Enterprise Apps &gt; Gallery Application</li>
+  <li>Register via Portal &gt; App Registrations</li>
+</ul>
+
+<p>I choose the first option - Non-Gallery App because its easier to learn when you can completely customize the SAML token when compared to <a href="https://docs.microsoft.com/en-us/azure/active-directory/saas-apps/sapboc-tutorial">SAP’s Gallery Application</a>. Also, you can use the portal to customize the SAML tokens for <a href="https://docs.microsoft.com/en-us/azure/active-directory/develop/active-directory-saml-claims-customization">(Non-Gallery) Enterprise Apps</a> compared to <a href="https://docs.microsoft.com/en-us/azure/active-directory/develop/active-directory-claims-mapping">App Registration</a> Apps.</p>
+
+<p>Here is how to register the SAP Analytics Cloud in Azure AD:</p>
+
+<p><img src="/assets/images/2019-02-25-Group-in-SAML-to-SAP/1.gif" alt="Alt Text" /></p>
+
+<p>Go to: Portal &gt; Azure Active Directory &gt; Enterprise Applications &gt; New application</p>
+
+<p>Select Non-Gallery Application from the top right</p>
+
+<p>Give it a name (say SAP Analytics Cloud) and click Add</p>
+
+<p>Now you have created a Service Principal and an Application Object. The Service Principal is accessible through: Portal &gt; Enterprise Application. The Application Object is accessible through: Portal &gt; App Regisration. Be sure to not use the Application Object created under Portal &gt; App Registration(Preview) because SAML 2.0 and WS-Federation protocols are not yet supported under the V2.0 endpoint (will be available soon). See here to <a href="https://docs.microsoft.com/en-us/azure/active-directory/develop/active-directory-how-applications-are-added">learn</a> more.</p>
+
+<h2 id="2-configure-the-sap-analytics-cloud-application-in-azure-ad">2. Configure the SAP Analytics Cloud Application in Azure AD</h2>
+<p>Now that you have an application object to represent SAP Analytics Cloud in Azure AD, lets configure it:</p>
+
+<ol>
+  <li>Set the Logout URL</li>
+  <li>Assign users to the application</li>
+  <li>Provide the Application permissions to the Azure AD</li>
+</ol>
+
+<h3 id="21-set-the-logout-url">2.1 Set the logout URL</h3>
+<p>Set the client application’s logout URL at: Portal &gt; App Registration &gt; Settings &gt; Logout URL</p>
+
+<p>You would set it to your SAC instance’s logout URL. This demo, sets it to https://localhost:44320 in support of optional step 6</p>
+
+<p><img src="/assets/images/2019-02-25-Group-in-SAML-to-SAP/2.gif" alt="Alt Text" /></p>
+
+<h3 id="22-assign-users-to-the-application">2.2 Assign users to the application</h3>
+<p>An administrator can control which users or groups have access to the aplication. For this demo, I set User Assignment Required to No.</p>
+
+<p>Go to: Portal &gt; Enterprise Applications &gt; Properties &gt;User Assignment required set to No.</p>
+
+<p><img src="/assets/images/2019-02-25-Group-in-SAML-to-SAP/3.gif" alt="Alt Text" /></p>
+
+<h3 id="23-provide-the-application-permissions-to-the-azure-ad">2.3 Provide the Application permissions to the Azure AD</h3>
+<p>Azure AD supports two kinds of permissions:</p>
+<ul>
+  <li>Delegated permissions: Used by apps that have a signed-in user present</li>
+  <li>Application permissions: Used by apps that run without a signed-in user present</li>
+</ul>
+
+<p>We will configure an administrator consented delegate permision to the SAC app.</p>
+
+<p>Go to: Portal &gt; App Registration &gt; Settings &gt; Required permissions.</p>
+
+<p>Click Add.</p>
+
+<p>Select “Windows Azure Active Directory”</p>
+
+<p>Provide Delegated Permission to the App for “Sign in and read user profile”</p>
+
+<p><img src="/assets/images/2019-02-25-Group-in-SAML-to-SAP/4.gif" alt="Alt Text" /></p>
+
+<h2 id="3-create-roles-for-the-application-in-azure-ad">3. Create Roles for the Application in Azure AD</h2>
+<p>In this step, we define the application roles in Azure AD for the SAC application.</p>
+
+<p>Azure AD provides two ways to create roles:</p>
+<ul>
+  <li>Update the <a href="https://docs.microsoft.com/en-us/azure/active-directory/develop/howto-add-app-roles-in-azure-ad-apps">manifest</a></li>
+  <li>Use <a href="https://docs.microsoft.com/en-us/azure/active-directory/develop/active-directory-enterprise-app-role-management">graph API</a></li>
+</ul>
+
+<p>Chose the manifest approach because its easier to explain on the portal.</p>
+
+<p>Lets create a sample SurveryCreator and SurveyAdministrator roles for this application:</p>
+
+<div class="language-json highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="s2">"appRoles"</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="w">
+  </span><span class="p">{</span><span class="w">
+    </span><span class="s2">"allowedMemberTypes"</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="w">
+      </span><span class="s2">"User"</span><span class="p">,</span><span class="w">
+      </span><span class="s2">"Application"</span><span class="w">
+    </span><span class="p">],</span><span class="w">
+    </span><span class="s2">"description"</span><span class="p">:</span><span class="w"> </span><span class="s2">"Dummy App Role1"</span><span class="p">,</span><span class="w">
+    </span><span class="s2">"displayName"</span><span class="p">:</span><span class="w"> </span><span class="s2">"AppRole1"</span><span class="p">,</span><span class="w">
+    </span><span class="s2">"id"</span><span class="p">:</span><span class="w"> </span><span class="s2">"1b4f816e-5eaf-48b9-8613-7923830595ad"</span><span class="p">,</span><span class="w">
+    </span><span class="s2">"isEnabled"</span><span class="p">:</span><span class="w"> </span><span class="kc">true</span><span class="p">,</span><span class="w">
+    </span><span class="s2">"value"</span><span class="p">:</span><span class="w"> </span><span class="s2">"AppRole1"</span><span class="w">
+  </span><span class="p">},</span><span class="w">
+  </span><span class="p">{</span><span class="w">
+    </span><span class="s2">"allowedMemberTypes"</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="w">
+      </span><span class="s2">"User"</span><span class="p">,</span><span class="w">
+      </span><span class="s2">"Application"</span><span class="w">
+    </span><span class="p">],</span><span class="w">
+    </span><span class="s2">"description"</span><span class="p">:</span><span class="w"> </span><span class="s2">"Dummy App RoleN"</span><span class="p">,</span><span class="w">
+    </span><span class="s2">"displayName"</span><span class="p">:</span><span class="w"> </span><span class="s2">"AppRoleN"</span><span class="p">,</span><span class="w">
+    </span><span class="s2">"id"</span><span class="p">:</span><span class="w"> </span><span class="s2">"c20e145e-5459-4a6c-a074-b942bbd4cfe1"</span><span class="p">,</span><span class="w">
+    </span><span class="s2">"isEnabled"</span><span class="p">:</span><span class="w"> </span><span class="kc">true</span><span class="p">,</span><span class="w">
+    </span><span class="s2">"value"</span><span class="p">:</span><span class="w"> </span><span class="s2">"AppRoleN"</span><span class="w">
+  </span><span class="p">}</span><span class="w">
+</span><span class="p">]</span><span class="w">
+</span></code></pre></div></div>
+
+<p>Notice that the “allowedMemberTypes” targets Applications and Users.</p>
+
+<p>To define the role, go to: Portal &gt; App Registrations</p>
+
+<p>Select All Apps from the drop down and pick the app you registered earlier</p>
+
+<p>Click Manifest and update the manifest with the App roles you want to create:</p>
+
+<p><img src="/assets/images/2019-02-25-Group-in-SAML-to-SAP/5.gif" alt="Alt Text" /></p>
+
+<p>Also read the documentation on <a href="">how to create App Roles</a></p>
+
+<h2 id="4-assign-security-groups--app-roles-to-the-application">4. Assign Security Groups &amp; App Roles to the Application</h2>
+<p>This is where we assign on-prem sourced Security Groups to the App Roles created for the Application. It allows us to filter and send only required Security Group names as App roles to SAC.</p>
+
+<p>In this demo, I have two pre-exisitng Security Groups: SecurityGroup1 and SecurityGroup2 that are sourced from on-prem.We are going to assign these SecurityGroups to the Application and give them an App Role.</p>
+
+<p>Go to: Portal &gt; Enterprise Application 
+Select the application Object
+Under Users and Groups, assign security groups to application roles
+Set the Roles for those assignments to be App Roles. Note, there is a 1:1 mapping between Security Groups and Application Roles</p>
+
+<p><img src="/assets/images/2019-02-25-Group-in-SAML-to-SAP/6.gif" alt="Alt Text" /></p>
+
+<h2 id="5-customize-the-claim-name-issued-in-the-saml-tokens">5. Customize the claim name issued in the SAML tokens</h2>
+
+<p>SAP Analytic Cloud client looks for the name at the end of the url formatted claim name, not the whole url  – so set the claim name to to a friendly name. This example sets it to Name=“MyAppRoles”.</p>
+
+<p>This changes the claim name in the SAML assertion from:</p>
+<div class="language-xml highlighter-rouge"><div class="highlight"><pre class="highlight"><code>    <span class="nt">&lt;Attribute</span> <span class="na">Name=</span><span class="s">"http://schemas.microsoft.com/ws/2008/06/identity/claims/role"</span><span class="nt">&gt;</span>
+        <span class="nt">&lt;AttributeValue&gt;</span>AppRole1<span class="nt">&lt;/AttributeValue&gt;</span>
+        <span class="nt">&lt;AttributeValue&gt;</span>AppRoleN<span class="nt">&lt;/AttributeValue&gt;</span>
+    <span class="nt">&lt;/Attribute&gt;</span>
+</code></pre></div></div>
+
+<p>to:</p>
+<div class="language-xml highlighter-rouge"><div class="highlight"><pre class="highlight"><code>    <span class="nt">&lt;Attribute</span> <span class="na">Name=</span><span class="s">"MyAppRoles"</span><span class="nt">&gt;</span>
+        <span class="nt">&lt;AttributeValue&gt;</span>AppRole1<span class="nt">&lt;/AttributeValue&gt;</span>
+        <span class="nt">&lt;AttributeValue&gt;</span>AppRoleN<span class="nt">&lt;/AttributeValue&gt;</span>
+    <span class="nt">&lt;/Attribute&gt;</span>
+</code></pre></div></div>
+
+<p><img src="/assets/images/2019-02-25-Group-in-SAML-to-SAP/7.gif" alt="Alt Text" /></p>
+
+<p>You can read more about it in the Azure documentation <a href="https://docs.microsoft.com/en-us/azure/active-directory/develop/active-directory-saml-claims-customization#editing-the-nameidentifier-claim">here</a></p>
+
+<h2 id="6-optionally-configure-a-sample-client-for-testing">6. Optionally Configure a sample client for testing</h2>
+<p>Steps:</p>
+<ol>
+  <li>Get the App ID URI from Azure AD</li>
+  <li>Clone the sample repo</li>
+  <li>Configure the sample application</li>
+</ol>
+
+<h3 id="61-get-the-applications-app-id-uri">6.1 Get the application’s App ID URI</h3>
+<p>The App ID URI is a uniquely identifier to the application in  Azure AD.</p>
+
+<p>Fetch the App ID URI from: Portal &gt; App Registration &gt; Settings &gt; Properties &gt; App ID URI</p>
+
+<p><img src="/assets/images/2019-02-25-Group-in-SAML-to-SAP/2.gif" alt="Alt Text" /></p>
+
+<h3 id="62-clone-the-repo">6.2 Clone the repo</h3>
+<p>Clone the <a href="https://github.com/Azure-Samples/active-directory-dotnet-webapp-wsfederation">WS-Federation client application</a> repo.</p>
+
+<h3 id="63-configure-webconfig">6.3 Configure web.config</h3>
+<p>In the application’s web.config, set the following in Web.config:</p>
+<ul>
+  <li>ida:Wtrealm key to the App ID URI. The App ID URI is auto created in Setp 1 when you register the application in Azure AD. The App ID URI is a URI that uniquely identifies the application in Azure AD.Find the App ID URI under: Portal &gt; App Registration &gt; Settings &gt; Properties &gt; App ID URI and set it to the ida:Wtrealm key in web.config</li>
+  <li>ida:AADInstance key is set to</li>
+</ul>
+
+<h2 id="7-test-and-verify">7. Test and verify!</h2>
+<p>Use a tool like <a href="https://chrome.google.com/webstore/detail/saml-tracer/mpdajninpobndbfcldcmbpnnbhibjmch?hl=en">SAML-tracer browser pluggin</a> to incept and verify that the SAML assertions are getting correctly generated.</p>
+
+<p>If you need to debug, <a href="https://docs.microsoft.com/en-us/azure/active-directory/develop/howto-v1-debug-saml-sso-issues">here</a> is some great help</p>
+
+<p><img src="/assets/images/2019-02-25-Group-in-SAML-to-SAP/9.png" alt="Alt Text" /></p>
+
+  </div>
+
+  <div class="date">
+    Written on February 25, 2019
+  </div>
+
+  
+<div class="comments">
+	<div id="disqus_thread"></div>
+	<script type="text/javascript">
+
+	    var disqus_shortname = 'sadakubsadwrong';
+
+	    (function() {
+	        var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+	        dsq.src = '//' + disqus_shortname + '.disqus.com/embed.js';
+	        (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+	    })();
+
+	</script>
+	<noscript>Please enable JavaScript to view the <a href="http://disqus.com/?ref_noscript">comments powered by Disqus.</a></noscript>
+</div>
+
+</article>
+
+    </div>
+
+    <div class="wrapper-footer">
+      <div class="container">
+        <footer class="footer">
+          
+<a href="mailto:sada@kubsad.tech"><i class="svg-icon email"></i></a>
+
+
+<a href="https://github.com/sada-kubsad"><i class="svg-icon github"></i></a>
+
+<a href="https://www.linkedin.com/in/sadakubsad"><i class="svg-icon linkedin"></i></a>
+
+
+
+
+
+
+        </footer>
+      </div>
+    </div>
+
+    
+
+  </body>
+</html>
