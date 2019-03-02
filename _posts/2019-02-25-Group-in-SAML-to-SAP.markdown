@@ -7,18 +7,18 @@ categories:
 - SAP
 ---
 
-Someoe asked how to add group membership to the SAML 2.0 assertion from Azure AD to an application such as SAP Analytics Cloud. This would allow seemless single sign-on to SAP Analytics Cloud (SAC). This post documents the steps to sending group membership in the SAML 2.0 tokens from Azure AD to SAP Analytics Cloud (SAC).
+Someone asked how to add group membership to the SAML 2.0 assertion from Azure AD to an application such as SAP Analytics Cloud. This would allow seamless single sign-on to SAP Analytics Cloud (SAC). This post documents the steps to sending group membership in the SAML 2.0 tokens from Azure AD to SAP Analytics Cloud (SAC).
 
 ## Background:
 ![Alt Text](/assets/images/2019-02-25-Group-in-SAML-to-SAP/diagram1.png)
 
-You can pass group membership either as Application Roles or  Security Group from Azure AD. Either gets translated into permissions during SAC's authorization. See [here](https://docs.microsoft.com/en-us/azure/architecture/multitenant-identity/app-roles) to learn the Pros and Cons of Application Roles and Security Groups.
+You can pass group membership either as Application Roles or Security Group from Azure AD. Either gets translated into permissions during SAC's authorization. See [here](https://docs.microsoft.com/en-us/azure/architecture/multitenant-identity/app-roles) to learn the Pros and Cons of Application Roles and Security Groups.
 
-I chose to send group membership as Application Roles because I need to filter groups. In this case, Groups were sourced from an on-prem AD. Security Groups cannot yet be filtered. Security Groups [are restricted](https://docs.microsoft.com/en-us/azure/active-directory/develop/active-directory-claims-mapping#table-2-saml-restricted-claim-set). Instead it is much simpler and cleaner to use App Roles. Each user is already assigned to one or more Security Groups (sourced from on-prem). Each Security Group gets assigned to an App Role (in setp 4 below). When a user logs in to SAC, Azure AD will emit all the App Roles that the user is indirectly assigned to via Security Groups. Neat! This  capability requires Azure AD Premium. You can learn about this capability [here](https://techcommunity.microsoft.com/t5/Azure-Active-Directory-Identity/Azure-Active-Directory-now-with-Group-Claims-and-Application/ba-p/243862)
+I chose to send group membership as Application Roles because I need to filter groups. In this case, Groups were sourced from an on-prem AD. Security Groups cannot yet be filtered. Security Groups [are restricted](https://docs.microsoft.com/en-us/azure/active-directory/develop/active-directory-claims-mapping#table-2-saml-restricted-claim-set). Instead it is much simpler and cleaner to use App Roles. Each user is already assigned to one or more Security Groups (sourced from on-prem). Each Security Group gets assigned to an App Role (in step 4 below). When a user logs in to SAC, Azure AD will emit all the App Roles that the user is indirectly assigned to via Security Groups. Neat! This capability requires Azure AD Premium. You can learn about this capability [here](https://techcommunity.microsoft.com/t5/Azure-Active-Directory-Identity/Azure-Active-Directory-now-with-Group-Claims-and-Application/ba-p/243862)
 
 Note: If groups are to be synched from an on-prem AD, AD Connect should be version 1.1.649.0 & above.
 
-I do not have access to SAC. I'm going to use a [WS-Federation client application](https://github.com/Azure-Samples/active-directory-dotnet-webapp-wsfederation) to mimick the SAC client interaction with Azure AD. See optional step 6 for how to setup and configure SAC client application. 
+I do not have access to SAC. I'm going to use a [WS-Federation client application](https://github.com/Azure-Samples/active-directory-dotnet-webapp-wsfederation) to mimic the SAC client interaction with Azure AD. See optional step 6 for how to setup and configure SAC client application. 
 
 ## Here are the steps:
 1. Create the application in Azure AD
@@ -36,7 +36,7 @@ The application object in Azure AD is a representation of SAP Analytics Cloud. T
 - Register via Portal > Enterprise Apps > Gallery Application
 - Register via Portal > App Registrations
 
-I choose the first option - Non-Gallery App because its easier to learn when you can completely customize the SAML token when compared to [SAP's Gallery Application](https://docs.microsoft.com/en-us/azure/active-directory/saas-apps/sapboc-tutorial). Also, you can use the portal to customize the SAML tokens for [(Non-Gallery) Enterprise Apps](https://docs.microsoft.com/en-us/azure/active-directory/develop/active-directory-saml-claims-customization) compared to [App Registration](https://docs.microsoft.com/en-us/azure/active-directory/develop/active-directory-claims-mapping) Apps. 
+I choose the first option - Non-Gallery App because it is easier to learn when you can completely customize the SAML token when compared to [SAP's Gallery Application](https://docs.microsoft.com/en-us/azure/active-directory/saas-apps/sapboc-tutorial). Also, you can use the portal to customize the SAML tokens for [(Non-Gallery) Enterprise Apps](https://docs.microsoft.com/en-us/azure/active-directory/develop/active-directory-saml-claims-customization) compared to [App Registration](https://docs.microsoft.com/en-us/azure/active-directory/develop/active-directory-claims-mapping) Apps. 
 
 
 Here is how to register the SAP Analytics Cloud in Azure AD:
@@ -49,7 +49,7 @@ Select Non-Gallery Application from the top right
 
 Give it a name (say SAP Analytics Cloud) and click Add
 
-Now you have created a Service Principal and an Application Object. The Service Principal is accessible through: Portal > Enterprise Application. The Application Object is accessible through: Portal > App Regisration. Be sure to not use the Application Object created under Portal > App Registration(Preview) because SAML 2.0 and WS-Federation protocols are not yet supported under the V2.0 endpoint (will be available soon). See here to [learn](https://docs.microsoft.com/en-us/azure/active-directory/develop/active-directory-how-applications-are-added) more. 
+Now you have created a Service Principal and an Application Object. The Service Principal is accessible through: Portal > Enterprise Application. The Application Object is accessible through: Portal > App Registration. Be sure to not use the Application Object created under Portal > App Registration(Preview) because SAML 2.0 and WS-Federation protocols are not yet supported under the V2.0 endpoint (will be available soon). See here to [learn](https://docs.microsoft.com/en-us/azure/active-directory/develop/active-directory-how-applications-are-added) more. 
 
 ## 2. Configure the SAP Analytics Cloud Application in Azure AD
 Now that you have an application object to represent SAP Analytics Cloud in Azure AD, lets configure it:
@@ -66,7 +66,7 @@ You would set it to your SAC instance's logout URL. This demo, sets it to https:
 ![Alt Text](/assets/images/2019-02-25-Group-in-SAML-to-SAP/2.gif)
 
 ### 2.2 Assign users to the application
-An administrator can control which users or groups have access to the aplication. For this demo, I set User Assignment Required to No. 
+An administrator can control which users or groups have access to the application. For this demo, I set User Assignment Required to No. 
 
 Go to: Portal > Enterprise Applications > Properties >User Assignment required set to No.
 
@@ -78,7 +78,7 @@ Azure AD supports two kinds of permissions:
 - Delegated permissions: Used by apps that have a signed-in user present
 - Application permissions: Used by apps that run without a signed-in user present
 
-We will configure an administrator consented delegate permision to the SAC app.
+We will configure an administrator consented delegate permission to the SAC app.
 
 Go to: Portal > App Registration > Settings > Required permissions. 
 
@@ -100,7 +100,7 @@ Azure AD provides two ways to create roles:
 
 Chose the manifest approach because its easier to explain on the portal.
 
-Lets create a sample SurveryCreator and SurveyAdministrator roles for this application:
+Let us create a sample AppRole1 and AppRoleN roles for this application:
 
 ```json
 "appRoles": [
@@ -144,7 +144,7 @@ Also read the documentation on [how to create App Roles]()
 ## 4. Assign Security Groups & App Roles to the Application
 This is where we assign on-prem sourced Security Groups to the App Roles created for the Application. It allows us to filter and send only required Security Group names as App roles to SAC. 
 
-In this demo, I have two pre-exisitng Security Groups: SecurityGroup1 and SecurityGroup2 that are sourced from on-prem.We are going to assign these SecurityGroups to the Application and give them an App Role.
+In this demo, I have two pre-existing Security Groups: SecurityGroup1 and SecurityGroup2 that are sourced from on-prem. We are going to assign these SecurityGroups to the Application and give them an App Role.
 
 Go to: Portal > Enterprise Application 
 Select the application Object
@@ -158,7 +158,7 @@ Set the Roles for those assignments to be App Roles. Note, there is a 1:1 mappin
 
 ## 5. Customize the claim name issued in the SAML tokens
 
-SAP Analytic Cloud client looks for the name at the end of the url formatted claim name, not the whole url  – so set the claim name to to a friendly name. This example sets it to Name=“MyAppRoles”.
+SAP Analytic Cloud client looks for the name at the end of the URL formatted claim name, not the whole URL  – so set the claim name to a friendly name. This example sets it to Name=“MyAppRoles”.
 
 This changes the claim name in the SAML assertion from:
 ```xml
@@ -189,7 +189,7 @@ Steps:
 3. Configure the sample application
 
 ### 6.1 Get the application's App ID URI
-The App ID URI is a uniquely identifier to the application in  Azure AD.
+The App ID URI is a uniquely identifier to the application in Azure AD.
 
 Fetch the App ID URI from: Portal > App Registration > Settings > Properties > App ID URI
 
@@ -203,7 +203,7 @@ Clone the [WS-Federation client application](https://github.com/Azure-Samples/ac
 ### 6.3 Configure web.config
 Configure the following in the application's Web.config file:
 - ida:Wtrealm key set to the App ID URI.
-App ID URI is auto generated in Setp 1 when you register the application in Azure AD. The App ID URI is a URI that uniquely identifies the application.
+App ID URI is auto generated in Step 1 when you register the application in Azure AD. The App ID URI is a URI that uniquely identifies the application.
 Find the App ID URI under: Portal > App Registration > Settings > Properties > App ID URI and set it to the ida:Wtrealm key in web.config
 
 - ida:AADInstance key is set to the AAD instance. Its value is: 
@@ -218,7 +218,7 @@ To solve for this look for this line in startup.auth.cs and add the ?appid=<your
 `private static string metadata = string.Format("{0}/{1}/federationmetadata/2007-06/federationmetadata.xml?appid=<AppID>", aadInstance, tenant);`
 
 ## 7. Test and verify!
-Use a tool like [SAML-tracer browser pluggin](https://chrome.google.com/webstore/detail/saml-tracer/mpdajninpobndbfcldcmbpnnbhibjmch?hl=en) to incept and verify that the SAML assertions are getting correctly generated.
+Use a tool like [SAML-tracer browser plugin](https://chrome.google.com/webstore/detail/saml-tracer/mpdajninpobndbfcldcmbpnnbhibjmch?hl=en) to incept and verify that the SAML assertions are getting correctly generated.
 
 If you need to debug, [here](https://docs.microsoft.com/en-us/azure/active-directory/develop/howto-v1-debug-saml-sso-issues) is some great help
 
