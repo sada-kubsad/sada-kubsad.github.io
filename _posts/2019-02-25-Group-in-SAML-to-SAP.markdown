@@ -201,16 +201,21 @@ Fetch the App ID URI from: Portal > App Registration > Settings > Properties > A
 Clone the [WS-Federation client application](https://github.com/Azure-Samples/active-directory-dotnet-webapp-wsfederation) repo. 
 
 ### 6.3 Configure web.config
-In the application's web.config, set the following in Web.config:
-- ida:Wtrealm key to the App ID URI. The App ID URI is auto created in Setp 1 when you register the application in Azure AD. The App ID URI is a URI that uniquely identifies the application in Azure AD.Find the App ID URI under: Portal > App Registration > Settings > Properties > App ID URI and set it to the ida:Wtrealm key in web.config
-- ida:AADInstance key is set to
+Configure the following in the application's Web.config file:
+- ida:Wtrealm key set to the App ID URI.
+App ID URI is auto generated in Setp 1 when you register the application in Azure AD. The App ID URI is a URI that uniquely identifies the application.
+Find the App ID URI under: Portal > App Registration > Settings > Properties > App ID URI and set it to the ida:Wtrealm key in web.config
 
-### 6.3 Configure 
+- ida:AADInstance key is set to the AAD instance. Its value is: 
+value="https://login.microsoftonline.com/<AAD Instance GUID>". You will find the AAD Instance GUID under: Portal > Azure Active Directory > Properties > Directory ID
 
-Note that once you solve the connection problem, the next one will be that sign in will fail because the token signature can’t be verified.   That is because Enterprise App config creates an App specific signing key, but the App is picking up AAD’s global cert from the tenant metadata.
-To solve that look for this line in startup.auth.cs and add the ?appid=<your appid> to the federationmetadata URL.  That will enable it to find the app specific signing cert. 
+### 6.3 Configure the token signature in startup.auth.cs 
 
-        private static string metadata = string.Format("{0}/{1}/federationmetadata/2007-06/federationmetadata.xml?appid=0ad2586e-3f2c-47e7-a498-40b970820cd5", aadInstance, tenant);
+Sign in will fail if the token signature can’t be verified. That is because Enterprise App config creates an App specific signing key, but the App is picking up AAD’s global cert from the tenant metadata by default.
+
+To solve for this look for this line in startup.auth.cs and add the ?appid=<your appid> to the federationmetadata URL.  That will enable it to find the app specific signing cert.
+
+`private static string metadata = string.Format("{0}/{1}/federationmetadata/2007-06/federationmetadata.xml?appid=<AppID>", aadInstance, tenant);`
 
 ## 7. Test and verify!
 Use a tool like [SAML-tracer browser pluggin](https://chrome.google.com/webstore/detail/saml-tracer/mpdajninpobndbfcldcmbpnnbhibjmch?hl=en) to incept and verify that the SAML assertions are getting correctly generated.
